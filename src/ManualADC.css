@@ -1,0 +1,88 @@
+/* Additional styles for sensor-signal injection workbench. Existing App.css is kept. */
+.manual-test-panel {
+  padding: 22px;
+  border: 1px solid #38516c;
+  border-radius: 13px;
+  background: #101c30;
+}
+.manual-test-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.manual-test-title h2 { margin-bottom: 6px; }
+.manual-test-title p, .manual-explanation {
+  color: #b4c4d9;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+.manual-test-note {
+  padding: 7px 12px;
+  border: 1px solid #66819a;
+  border-radius: 6px;
+  color: #c9d8ea;
+  font-size: 12px;
+}
+.manual-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.manual-field { display: flex; flex-direction: column; gap: 7px; }
+.manual-field span, .manual-polarities span { color: #cbd5e1; font-size: 13px; }
+.manual-field small { color: #849bb8; }
+.manual-field input, .manual-polarities select {
+  width: 100%;
+  min-width: 0;
+  background: #0b1627;
+  border: 1px solid #54647c;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 15px;
+  padding: 10px 12px;
+}
+.manual-field input:focus, .manual-polarities select:focus {
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
+}
+.manual-polarities {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.manual-polarities label { display: flex; flex-direction: column; gap: 7px; }
+.manual-explanation { border-top: 1px solid #334155; padding-top: 14px; }
+.adc-table-wrap {
+  border: 1px solid #334155;
+  background: #101c30;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+.adc-detail-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+  min-width: 850px;
+}
+.adc-detail-table th, .adc-detail-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #334155;
+}
+.adc-detail-table th {
+  background: #182a43;
+  color: #bddef9;
+}
+.adc-detail-table td { color: #e1eaf5; }
+.adc-detail-table tbody tr:last-child td { border-bottom: none; }
+@media (max-width: 900px) {
+  .manual-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 570px) {
+  .manual-fields, .manual-polarities { grid-template-columns: 1fr; }
+}

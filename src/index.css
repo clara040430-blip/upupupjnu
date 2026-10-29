@@ -1,0 +1,19 @@
+
+:root {
+  font-family: Arial, "Malgun Gothic", sans-serif;
+  color: #e5edf8;
+  background: #0b1120;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button {
+  font: inherit;
+}
