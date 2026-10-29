@@ -11,7 +11,7 @@ import './SensorHistory.css';
 
 const MAX_RECORDS_PER_BOARD = 180;
 const SAMPLING_INTERVAL_MS = 1000;
-const COLORS = ['#44b8ff', '#ffc76d', '#77deb7', '#ca9bff', '#ff8793'];
+const COLORS = ['#2563eb', '#e8991b', '#0c9966', '#9560d7', '#d94b6a'];
 const LABELS = {
   vpv: 'PV 입력전압',
   ipv: 'PV 입력전류',
@@ -70,15 +70,15 @@ function HistoryPlot({ samples, group }) {
       </div>
       {range === null ? (
         <p className="history-empty">
-          이 항목에는 아직 유효한 ADC 환산 기록이 없어. 센싱 시험을 시작하고 입력값을 확인해 줘.
-          전류는 시험용 방향을 선택해야 그래프에 나타나.
+          아직 유효한 ADC 환산 기록이 없습니다. 센싱 시험을 시작하고 입력값을 확인해 주세요.
+          전류 그래프는 시험용 전류 방향을 선택하셔야 표시됩니다.
         </p>
       ) : (
         <svg
           className="history-chart"
           viewBox={`0 0 ${PLOT.width} ${PLOT.height}`}
           role="img"
-          aria-label={`${group.title} 센싱 기록 그래프. 실제 PCB 측정이나 CLLC 물리 모델 결과가 아님`}
+          aria-label={`${group.title} 센싱 기록 그래프`}
         >
           {Array.from({ length: 5 }, (_, i) => {
             const tickValue = range.max - (i / 4) * (range.max - range.min);
@@ -174,7 +174,7 @@ export default function SensorHistory({ reports, simulationEnabled, selectedId }
         <div>
           <h2>{selectedId} · ADC 센싱 실시간 기록</h2>
           <p className="history-description">
-            1초마다 4대 보드의 현재 가상 ADC 환산값을 기록해. 값이 일정하면 그래프는 수평선으로 보여.
+            1초 간격으로 4대 보드의 가상 ADC 환산값을 기록합니다. 입력값이 일정한 동안에는 그래프가 수평선으로 표시됩니다.
           </p>
         </div>
         <span className={`history-status ${simulationEnabled ? 'recording' : ''}`}>
@@ -194,20 +194,17 @@ export default function SensorHistory({ reports, simulationEnabled, selectedId }
         <span className="history-count">현재 보드: {samples.length}개 기록 (최대 {MAX_RECORDS_PER_BOARD}개)</span>
         <button className="history-action" type="button" disabled={samples.length === 0}
           onClick={() => exportRecordsCsv(selectedId, samples)}>
-          이 보드 CSV 저장
+          선택 보드 CSV 다운로드
         </button>
         <button className="history-action history-clear" type="button" disabled={samples.length === 0}
           onClick={() => setHistories((old) => ({ ...old, [selectedId]: [] }))}>
-          이 보드 기록 지우기
+          선택 보드 기록 삭제
         </button>
       </div>
 
       <HistoryPlot samples={samples} group={group} />
       <p className="history-disclaimer">
-        신호 주입 시험 기록 · 명목(미보정) ADC 환산값 · 실제 보드 데이터 아님 ·
-        CLLC 출력 과도응답/주파수 제어를 계산한 그래프 아님 ·
-        유효하지 않은 값은 0으로 대체하지 않고 그래프를 끊어 표시함 ·
-        새로고침하면 기록이 초기화됨
+        센서 품질에 이상이 있는 구간은 그래프가 끊어져 표시됩니다. 기록은 새로고침하면 초기화됩니다.
       </p>
     </section>
   );

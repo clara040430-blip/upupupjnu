@@ -1,0 +1,41 @@
+/* Visual layer only; latched FAULT state machine unchanged */
+.protect-panel { background:#fff; border:1px solid #e3eaf3; border-radius:20px; box-shadow:0 10px 32px rgba(22,40,75,.055); padding:28px; margin:24px 0; color:#1b2f4c; }
+.protect-title-row { display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px; }
+.protect-title-row h2 { margin:0 0 6px; font-size:1.3rem; font-weight:830; }
+.protect-title-row p,.protect-hint { margin:0; color:#7b8ba0; font-size:.78rem; line-height:1.7; }
+.protect-sim-tag { color:#9a6a28; border:1px solid #f0dbb6; background:#fff8e8; padding:8px 11px; border-radius:999px; font-weight:740; font-size:.72rem; }
+.protect-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:11px; margin:20px 0 25px; }
+.protect-mini { display:flex; flex-direction:column; gap:7px; padding:15px 13px; border-radius:12px; border:1px solid #e3eaf5; background:#f8fbff; }
+.protect-mini strong { color:#294d7b; font-size:.92rem; }
+.protect-mini span { color:#71849b; font-size:.76rem; }
+.protect-panel h3 { font-size:.93rem; margin:22px 0 8px; color:#334e72; }
+.protect-fields { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:15px; }
+.protect-field { display:flex; flex-direction:column; gap:7px; min-width:0; color:#60738d; font-size:.76rem; font-weight:730; }
+.protect-field input { width:100%; min-width:0; border:1px solid #d5e0ed; background:#fff; color:#223855; border-radius:9px; padding:11px 12px; }
+.protect-status-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:23px 0; }
+.protect-status { display:flex; flex-direction:column; gap:8px; background:#f2f8ff; border:1px solid #d6e5f7; border-left:5px solid #5697ee; border-radius:12px; padding:18px 20px; }
+.protect-status > span { font-size:.76rem; color:#6380a2; }
+.protect-status strong { font-size:1.4rem; color:#235b9b; }
+.protect-status small { font-size:.74rem; color:#7087a2; }
+.protect-fault-latched { background:#fff1f2; border-color:#f5c7cf; border-left-color:#dc3757; }
+.protect-fault-latched strong { color:#b92144; }
+.protect-reset-ready,.protect-warning { background:#fff8ea; border-color:#eedab2; border-left-color:#e9a53c; }
+.protect-reset-ready strong,.protect-warning strong { color:#ac7113; }
+.protect-data-unverified { background:#f4f6f9; border-color:#dbe3ed; border-left-color:#99a7b9; }
+.protect-data-unverified strong { color:#576a82; }
+.protect-actions { display:flex; flex-direction:column; justify-content:center; align-items:stretch; gap:9px; }
+.protect-actions button { border:1px solid #2c67d7; color:white; background:#2563eb; padding:12px 15px; border-radius:10px; font-size:.83rem; font-weight:770; }
+.protect-actions button:disabled { cursor:not-allowed; opacity:.45; }
+.protect-actions .protect-secondary { color:#516d8f; background:#f3f7fc; border-color:#dbe5ef; }
+.protect-actions small { color:#b76a24; font-size:.73rem; line-height:1.6; }
+.protect-fault { background:#fff1f3; color:#b92a45; border:1px solid #f8ced8; padding:11px 13px; border-radius:9px; }
+.protect-results { background:#f8fbff; border:1px solid #e3ebf5; padding:13px 16px; border-radius:10px; overflow-wrap:anywhere; }
+.protect-results p { margin:6px 0; font-size:.78rem; line-height:1.7; color:#597088; }
+.protect-events-wrap { overflow-x:auto; margin-top:9px; }
+.protect-events { border-collapse:collapse; width:100%; font-size:.78rem; min-width:520px; }
+.protect-events th,.protect-events td { text-align:left; padding:11px; border-bottom:1px solid #e5eaf2; }
+.protect-events th { color:#3f658f; background:#f0f6fc; }
+.protect-disclaimer { border-top:1px solid #edf0f5; padding-top:15px; color:#a57436; font-size:.76rem; line-height:1.75; }
+.protect-error { color:#b62a49; font-weight:750; font-size:.8rem; }
+@media(max-width:860px){.protect-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.protect-fields { grid-template-columns:repeat(2,minmax(0,1fr)); }.protect-status-row { grid-template-columns:1fr; }}
+@media(max-width:550px){.protect-panel { padding:19px 14px; border-radius:16px; }.protect-fields { grid-template-columns:1fr; }}
