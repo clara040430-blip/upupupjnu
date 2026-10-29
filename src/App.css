@@ -152,3 +152,24 @@ a { color: inherit; }
  .illustration-caption { font-size:.63rem; }
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after {scroll-behavior:auto!important; transition:none!important;}}
+
+/* v2.3 integration: preserves all original panels below. */
+.integration-panel{background:#fff;border:1px solid #dbe5f3;border-radius:20px;padding:26px;box-shadow:var(--shadow)}
+.integration-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.integration-head h2{margin:2px 0 8px}.integration-head p:last-child{font-size:.86rem;color:#65748c;max-width:840px;line-height:1.8;margin-bottom:16px}
+.integration-pill{white-space:nowrap;color:#245fc2;background:#ebf3ff;border:1px solid #d6e6fb;padding:7px 13px;border-radius:999px;font-size:.72rem;font-weight:800;letter-spacing:.05em}
+.integration-mode-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0 18px}
+.integration-mode{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:6px;border:1px solid #dbe5f2;border-radius:13px;background:#f8fbff;padding:16px;color:#283b5a}
+.integration-mode strong{font-size:.87rem}.integration-mode small{font-size:.73rem;color:#71839a;line-height:1.6}
+.integration-mode.active{border-color:#3676e9;background:#eaf3ff;box-shadow:inset 0 0 0 1px #3676e9}
+.integration-mode:hover{border-color:#5293ea}
+.integration-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.integration-metrics>div{padding:13px;background:#f7f9fd;border:1px solid #e7edf6;border-radius:11px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.integration-metrics small{color:#687e98;font-size:.69rem}.integration-metrics strong{font-size:.8rem;color:#294365;overflow-wrap:anywhere}
+.integration-footnote{color:#65748c;font-size:.77rem;line-height:1.8;margin:15px 0 0}
+.integration-bridge-config{border:1px solid #e1e9f2;background:#f9fbff;border-radius:13px;padding:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.integration-bridge-config label{font-size:.81rem;font-weight:700;display:flex;align-items:center;flex-wrap:wrap;gap:12px}
+.integration-bridge-config input{width:min(430px,100%);padding:8px 12px;border:1px solid #cdd8e9;border-radius:8px;background:#fff}
+.integration-bridge-config small{color:#6a7c94}.integration-success{color:#13865f}.integration-warning{color:#b14b24}
+@media(max-width:950px){.integration-mode-grid{grid-template-columns:1fr}.integration-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.integration-panel{padding:16px}.integration-head{flex-wrap:wrap}.integration-metrics{grid-template-columns:1fr 1fr}}
