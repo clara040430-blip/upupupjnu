@@ -114,7 +114,7 @@ function App() {
     { id: 'history', label: '실시간 그래프', icon: '⌁', group: 'ANALYSIS' },
   ];
   const PAGE_HINTS = {
-    home: ['한눈에 보는 통합 시험', '시연할 실험을 고르고, 보드를 선택해 시작하세요.'],
+    home: ['1kW급 PV-CLLC 캡스톤디자인', '올라가조 제어보드 · 제어 알고리즘 통합 시험'],
     integration: ['데이터 연결', '가상 데이터 · PC 브리지 · 수동 입력 모드를 선택하세요.'],
     boards: ['보드 현황', '4개 보드의 센싱 상태를 비교하고 분석할 보드를 선택하세요.'],
     manual: ['수동 센서 시험', '조건을 설정하고 시험을 시작한 뒤 결과를 확인하세요.'],
@@ -444,7 +444,7 @@ function App() {
             </div>}
             <div className="workspace-page is-active home-page" style={{display:activePage==='home'?'block':'none'}}>
               <section className="home-hero">
-                <div className="home-hero-left"><span className="home-kicker">올라가조 / 1kW PV–CLLC</span><h2>제어보드 통합 시험<br/>워크스페이스</h2><p>전압·전류·온도 센싱부터 보호 판단, ADC 필터 반응, 냉각 분석까지. 원하는 시험을 선택하면 설정 화면으로 바로 이동합니다.</p>
+                <div className="home-hero-left"><span className="home-kicker">올라가조 · CAPSTONE DESIGN</span><h2 className="home-project-title"><span className="home-title-primary">1kW급 PV-CLLC 컨버터를</span><span>제어하기 위한 제어보드 제작 및</span><span>제어 알고리즘 개발</span></h2><p><strong>제어보드 통합 시험 워크스페이스</strong> · 전압·전류·온도 센싱, 보호 판단, ADC 필터 및 냉각 분석을 시험합니다.</p>
                   <div className="home-hero-actions"><button type="button" className="button-primary" onClick={()=>navigate('manual')}>실험 시작하기 <span>↗</span></button><button type="button" className="button-outline" onClick={()=>navigate('boards')}>4개 보드 보기</button></div>
                 </div>
                 <div className="home-hero-right"><div className="home-stats-kicker">SYSTEM AT A GLANCE</div><div className="home-stat-grid"><div><strong>04</strong><span>모니터링 보드</span></div><div><strong>09</strong><span>ADC 센서 채널</span></div><div><strong>1ms</strong><span>펌웨어 설정 주기</span></div><div><strong>100ms</strong><span>웹용 스냅샷 설계</span></div></div><p>가상 시험 데이터 · PWM/PFM 실제 제어 미연결</p></div>

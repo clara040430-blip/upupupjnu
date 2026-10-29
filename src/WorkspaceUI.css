@@ -164,3 +164,22 @@ body { background:var(--ux-bg); }
 .board-status-unverified {color:#9b6625 !important;}
 .board-status-unverified .state-indicator {background:#c9a15e !important;}
 .board-status-normal .state-indicator {background:#1a9a7d !important;}
+
+/* v2.7.1: Make the full capstone project title the primary home-page headline.
+   Presentation only; no changes to simulation, telemetry or protection logic. */
+.home-hero .home-project-title {
+  display:flex; flex-direction:column; align-items:flex-start; gap:4px;
+  font-size:clamp(1.45rem,2.0vw,2rem); line-height:1.28;
+  letter-spacing:-.054em; word-break:keep-all; overflow-wrap:anywhere;
+  margin:15px 0 18px; width:100%;
+}
+.home-project-title > span { display:block; }
+.home-project-title .home-title-primary {
+  color:#1855be; font-size:clamp(1.92rem,2.65vw,2.75rem);
+  font-weight:900; line-height:1.22; margin-bottom:6px;
+}
+.home-hero-left > p strong { color:#2b4568; font-weight:850; }
+@media(max-width:720px){
+  .home-hero .home-project-title {font-size:1.36rem; line-height:1.32;}
+  .home-project-title .home-title-primary {font-size:clamp(1.7rem,6.1vw,2.15rem);}
+}
