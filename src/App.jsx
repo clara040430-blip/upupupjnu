@@ -23,6 +23,7 @@ import ProtectionPanel from './components/ProtectionPanel';
 import CoolingPanel from './components/CoolingPanel';
 import { createDemoPackets } from './integration/demoPackets';
 import { packetToReport, validateTelemetryPacket } from './integration/protocol';
+import './WorkspaceUI.css';
 // ============================================================
 // Initial sensor inputs for four independent boards
 // ============================================================
@@ -93,6 +94,44 @@ function formatNumber(value, digits = 2) {
 // ============================================================
 
 function App() {
+  // UI-only navigation. All experimental components remain mounted when hidden,
+  // so switching pages never clears protection history, graphs or form drafts.
+  const [activePage, setActivePage] = useState('home');
+  const [viewStage, setViewStage] = useState('setup');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const NAV_ITEMS = [
+    { id: 'home', label: '홈 · 전체 개요', icon: '⌂', group: 'OVERVIEW' },
+    { id: 'integration', label: '데이터 연결', icon: '⇄', group: 'WORKSPACE' },
+    { id: 'boards', label: '보드 현황', icon: '▦', group: 'WORKSPACE' },
+    { id: 'manual', label: '수동 센서 시험', icon: '◫', group: 'EXPERIMENTS' },
+    { id: 'protection', label: '보호 기능 시험', icon: '◇', group: 'EXPERIMENTS' },
+    { id: 'filter', label: 'ADC 필터 실험', icon: '≋', group: 'EXPERIMENTS' },
+    { id: 'cooling', label: '냉각 계산', icon: '◷', group: 'EXPERIMENTS' },
+    { id: 'measurements', label: '센싱 · 전력 분석', icon: '▤', group: 'ANALYSIS' },
+    { id: 'history', label: '실시간 그래프', icon: '⌁', group: 'ANALYSIS' },
+  ];
+  const PAGE_HINTS = {
+    home: ['한눈에 보는 통합 시험', '시연할 실험을 고르고, 보드를 선택해 시작하세요.'],
+    integration: ['데이터 연결', '가상 데이터 · PC 브리지 · 수동 입력 모드를 선택하세요.'],
+    boards: ['보드 현황', '4개 보드의 센싱 상태를 비교하고 분석할 보드를 선택하세요.'],
+    manual: ['수동 센서 시험', '조건을 설정하고 시험을 시작한 뒤 결과를 확인하세요.'],
+    protection: ['보호 기능 시험', '보호 기준 설정과 FAULT 판단 및 복귀 기록을 확인하세요.'],
+    filter: ['ADC 필터 실험', '채널 · 노이즈 · EMA 설정과 필터 반응을 비교하세요.'],
+    cooling: ['냉각 계산', '주변 온도와 시정수를 입력하고 계산 결과를 확인하세요.'],
+    measurements: ['센싱 · 전력 분석', '선택한 보드의 9채널 측정값과 환산 품질을 확인하세요.'],
+    history: ['실시간 그래프', '시간에 따른 센싱 값 변화와 CSV 기록을 확인하세요.'],
+  };
+  const EXPERIMENT_PAGES = ['manual', 'protection', 'filter', 'cooling'];
+  function navigate(page) {
+    setActivePage(page);
+    setViewStage('setup');
+    setSidebarOpen(false);
+    if (page === 'manual') setSourceMode('manual');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+  function pageClass(page) {
+    return `workspace-page ${activePage === page ? 'is-active' : ''} ${viewStage === 'results' ? 'stage-results' : 'stage-setup'}`;
+  }
   // ----------------------------------------------------------
   // Board and simulation state
   // ----------------------------------------------------------
@@ -322,104 +361,84 @@ function App() {
   // ==========================================================
 
   return (
-    <main className="dashboard">
+    <main className="dashboard dashboard-v26">
 
-      {/* 상단 브랜드 / 빠른 이동 */}
-      <div className="app-topbar">
-        <a className="brand" href="#top" aria-label="올라가조 대시보드 맨 위로 이동">
-          <span className="brand-mark" aria-hidden="true">↗</span>
-          <span className="brand-copy"><strong>올라가조</strong><small>CAPSTONE DESIGN · PV-CLLC</small></span>
-        </a>
-        <nav className="quick-nav" aria-label="대시보드 섹션 이동">
-          <a href="#integration">통신 시연</a>
-          <a href="#boards">보드 현황</a>
-          <a href="#sensor-input">센서 입력</a>
-          <a href="#sensor-results">측정 결과</a>
-          <a href="#protection">보호 시험</a>
-          <a href="#history">실시간 그래프</a>
-          <a href="#adc-filter">ADC 필터 실험</a>
-          <a href="#cooling">냉각 계산</a>
-        </nav>
-        <span className="top-mode-label">올라가조 프로젝트</span>
-      </div>
-
-      <header className="dashboard-header" id="top">
-        <div className="hero-copy">
-          <p className="eyebrow">CAPSTONE DESIGN <span className="eyebrow-dot">·</span> 올라가조 팀</p>
-          <h1>1kW급 PV-CLLC 컨버터를 제어하기 위한<br className="desktop-only" /> 제어보드 제작 및 제어 알고리즘 개발</h1>
-          <p className="subtitle">F28388D 기반 통합 모니터링 및 센싱·보호 시뮬레이션</p>
-          <p className="hero-description">
-            센싱 결과, 보호 상태, 실시간 기록과 주변 온도에 따른 냉각 계산을 한곳에서 확인할 수 있습니다.
-          </p>
-          <div className="hero-meta" aria-label="프로젝트 구성">
-            <span><b>01</b> 센싱 9채널</span>
-            <span><b>02</b> 보드 4대</span>
-            <span><b>03</b> 보호 상태 시험</span>
-          </div>
-          <div className="header-actions">
-            <button className="simulation-button" type="button"
-              aria-pressed={sensorActive}
-              onClick={() => sourceMode === 'manual'
-                ? setSimulationEnabled((previous) => !previous)
-                : sourceMode === 'demo' ? setDemoRunning((previous) => !previous) : undefined}
-              disabled={sourceMode === 'bridge'}>
-              <span className="play-symbol" aria-hidden="true">{sensorActive ? '■' : '▶'}</span>
-              {sourceMode === 'bridge' ? '브리지 수신 자동 제어' : sensorActive ? '센싱 시험 중지' : '센싱 시험 시작'}
-            </button>
-            <span className={`system-state ${sensorActive ? 'is-running' : ''}`}>
-              <span className="state-indicator" />
-              {sensorActive ? '데이터 표시 중' : '시험 대기'}
-            </span>
-          </div>
-        </div>
-
-        {/* 실제 회로도라고 주장하지 않는 기능 개념도 */}
-        <div className="flow-illustration" aria-label="시스템 기능 개념도">
-          <div className="illustration-head">
-            <span>시스템 구성도</span><small>FUNCTIONAL OVERVIEW</small>
-          </div>
-          <svg className="system-svg" viewBox="0 0 540 296" role="img"
-            aria-label="태양광 입력에서 CLLC 전력회로를 거쳐 DC 출력으로 이어지는 전력 경로와 센싱 신호, F28388D 제어보드, 웹 모니터링의 개념적 관계">
-            <defs>
-              <linearGradient id="pvGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#f3faff"/><stop offset="1" stopColor="#d8e9ff"/></linearGradient>
-              <linearGradient id="boardGradient" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#eafdf4"/><stop offset="1" stopColor="#c5f1dd"/></linearGradient>
-            </defs>
-            <text x="16" y="22" className="svg-hint">POWER PATH · 전력 경로 (개념도)</text>
-            <rect x="12" y="34" width="145" height="80" rx="13" fill="url(#pvGradient)" stroke="#a8c9ed"/>
-            <g stroke="#4e80c2" fill="none" strokeWidth="2.2">
-              <rect x="29" y="48" width="37" height="34" rx="3"/><path d="M41 48v34M54 48v34M29 60h37M29 72h37M48 83v9"/>
-            </g>
-            <text x="82" y="67" className="svg-title">PV 입력</text><text x="82" y="87" className="svg-sub">태양광 전원</text>
-            <path d="M162 74h25" className="svg-arrow"/><path d="M182 69l7 5-7 5" className="svg-arrow"/>
-            <rect x="195" y="34" width="150" height="80" rx="13" fill="#edf3ff" stroke="#b2c8f7"/>
-            <g stroke="#4468d6" strokeWidth="2.3" fill="none"><path d="M214 66q9-17 18 0t18 0"/><path d="M214 85h37"/><path d="M239 80l11 5-11 5"/></g>
-            <text x="263" y="66" className="svg-title">CLLC</text><text x="263" y="87" className="svg-sub">전력변환 회로</text>
-            <path d="M350 74h24" className="svg-arrow"/><path d="M369 69l7 5-7 5" className="svg-arrow"/>
-            <rect x="382" y="34" width="145" height="80" rx="13" fill="#fff8e7" stroke="#e9d098"/>
-            <g stroke="#ca8d19" fill="none" strokeWidth="2.4"><path d="M397 61h21v23h-21zM402 56v5M413 56v5M402 84v5M413 84v5"/></g>
-            <text x="428" y="67" className="svg-title">DC 출력</text><text x="428" y="87" className="svg-sub">부하 측</text>
-            <path d="M269 119v21" className="svg-dash"/><path d="M265 135l4 7 4-7" className="svg-dash"/>
-            <rect x="195" y="148" width="150" height="51" rx="10" fill="#fff" stroke="#c9d4e1" strokeDasharray="4 3"/>
-            <text x="270" y="168" textAnchor="middle" className="svg-title">전압 · 전류 · 온도</text>
-            <text x="270" y="185" textAnchor="middle" className="svg-sub">센싱값 / ADC 경로</text>
-            <path d="M269 204v15" className="svg-dash"/><path d="M265 214l4 7 4-7" className="svg-dash"/>
-            <rect x="195" y="229" width="150" height="54" rx="11" fill="url(#boardGradient)" stroke="#a3dabb"/>
-            <text x="270" y="249" textAnchor="middle" className="svg-title">F28388D 제어보드</text>
-            <text x="270" y="268" textAnchor="middle" className="svg-sub">ADC 센싱 · 보호 상태</text>
-            <path d="M350 256h23" className="svg-dash"/><path d="M368 251l7 5-7 5" className="svg-dash"/>
-            <rect x="382" y="229" width="145" height="54" rx="11" fill="#f5efff" stroke="#d3c1fa"/>
-            <text x="454" y="249" textAnchor="middle" className="svg-title">웹 모니터링</text>
-            <text x="454" y="268" textAnchor="middle" className="svg-sub">실시간 기록·상태 표시</text>
-            <text x="16" y="184" className="svg-note">점선: 기능 관계</text>
-            <text x="16" y="200" className="svg-note">시스템 기능 개념도</text>
-          </svg>
-          <div className="illustration-caption">
-            <span className="legend-swatch" /> 전력 경로
-            <span className="legend-dash" /> 센싱·제어 개념 흐름
-          </div>
-        </div>
-      </header>
-
+      <div className="workspace-shell">
+        <aside className={`workspace-sidebar ${sidebarOpen ? 'sidebar-open' : ''}`} aria-label="기능별 메뉴">
+          <button type="button" className="sidebar-brand" onClick={() => navigate('home')}>
+            <span className="sidebar-symbol" aria-hidden="true">↗</span>
+            <span className="sidebar-brand-name"><strong>올라가조</strong><small>PV-CLLC CONTROL LAB</small></span>
+          </button>
+          <div className="sidebar-label">CONTROL WORKSPACE <span>v2.6</span></div>
+          <nav className="sidebar-navigation" aria-label="실험과 분석 메뉴">
+            {NAV_ITEMS.map((item, i) => (
+              <div key={item.id}>
+                {(i === 0 || NAV_ITEMS[i - 1].group !== item.group) && <div className="nav-group-label">{item.group}</div>}
+                <button type="button" className={`sidebar-link ${activePage === item.id ? 'active' : ''}`} aria-current={activePage === item.id ? 'page' : undefined}
+                  onClick={() => navigate(item.id)}>
+                  <span className="sidebar-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span>
+                  {activePage === item.id && <span className="sidebar-current" aria-hidden="true" />}
+                </button>
+              </div>
+            ))}
+          </nav>
+          <div className="sidebar-bottom"><div className="sidebar-device"><span className="device-led"/><strong>F28388D</strong><small>PCB 미연결 · 시뮬레이션</small></div><p>실제 센서 측정값이 아닌 개발·시험용 데이터입니다.</p></div>
+        </aside>
+        {sidebarOpen && <button type="button" className="sidebar-backdrop" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)} />}
+        <div className="workspace-main">
+          <header className="workspace-toolbar">
+            <div className="toolbar-left"><button className="mobile-menu-button" type="button" aria-label="메뉴 열기" onClick={() => setSidebarOpen(true)}>☰</button>
+              <span className="toolbar-breadcrumb">WORKSPACE <span>/</span> {PAGE_HINTS[activePage][0]}</span></div>
+            <div className="toolbar-actions">
+              <span className="toolbar-source">{sourceMode === 'demo' ? 'BROWSER DEMO' : sourceMode === 'manual' ? 'MANUAL TEST' : (packets[selectedId]?.source || 'PC BRIDGE')}</span>
+              <label className="toolbar-board-select"><span>보드</span><select aria-label="현재 작업 보드" value={selectedId} onChange={e=>setSelectedId(e.target.value)}>
+                {BOARD_IDS.map(id=><option value={id} key={id}>{id}</option>)}
+              </select></label>
+              <button type="button" className={`toolbar-run ${sensorActive ? 'is-running' : ''}`} disabled={sourceMode === 'bridge'}
+                onClick={() => sourceMode === 'manual' ? setSimulationEnabled(old => !old) : setDemoRunning(old => !old)}>
+                {sourceMode === 'bridge' ? '브리지 수신' : sensorActive ? '■ 시험 중지' : '▶ 시험 시작'}
+              </button>
+              <span className={`toolbar-connection ${sensorActive ? 'is-on' : ''}`}><i />{sensorActive ? '시험 데이터 표시 중' : '시험 대기'}</span>
+            </div>
+          </header>
+          <div className="workspace-inner">
+            <div className="workspace-page-heading">
+              <div><p className="workspace-eyebrow">CAPSTONE DESIGN / TEST CONSOLE</p><h1>{PAGE_HINTS[activePage][0]}</h1><p>{PAGE_HINTS[activePage][1]}</p></div>
+              <div className="workspace-page-actions">
+                {activePage !== 'home' && <button type="button" className="button-quiet" onClick={()=>navigate('home')}>← 홈으로</button>}
+                {EXPERIMENT_PAGES.includes(activePage) && <button type="button" className="button-quiet" onClick={()=>setViewStage('setup')}>↺ 다시 설정</button>}
+              </div>
+            </div>
+            {EXPERIMENT_PAGES.includes(activePage) && <div className="workflow-bar" role="group" aria-label="시험 단계">
+              <button type="button" className={`workflow-tab ${viewStage === 'setup' ? 'is-current' : ''}`} onClick={()=>setViewStage('setup')} aria-pressed={viewStage === 'setup'}><span>01</span> 조건 설정</button>
+              <span className="workflow-arrow">→</span>
+              <button type="button" className={`workflow-tab ${viewStage === 'results' ? 'is-current' : ''}`} onClick={()=>setViewStage('results')} aria-pressed={viewStage === 'results'}><span>02</span> 결과 확인</button>
+              {viewStage === 'setup' && <button type="button" className="workflow-next" onClick={()=>setViewStage('results')}>결과 확인 →</button>}
+              {viewStage === 'results' && <button type="button" className="workflow-next" onClick={()=>setViewStage('setup')}>설정으로 돌아가기 ↺</button>}
+            </div>}
+            <div className="workspace-page is-active home-page" style={{display:activePage==='home'?'block':'none'}}>
+              <section className="home-hero">
+                <div className="home-hero-left"><span className="home-kicker">올라가조 / 1kW PV–CLLC</span><h2>제어보드 통합 시험<br/>워크스페이스</h2><p>전압·전류·온도 센싱부터 보호 판단, ADC 필터 반응, 냉각 분석까지. 원하는 시험을 선택하면 설정 화면으로 바로 이동합니다.</p>
+                  <div className="home-hero-actions"><button type="button" className="button-primary" onClick={()=>navigate('manual')}>실험 시작하기 <span>↗</span></button><button type="button" className="button-outline" onClick={()=>navigate('boards')}>4개 보드 보기</button></div>
+                </div>
+                <div className="home-hero-right"><div className="home-stats-kicker">SYSTEM AT A GLANCE</div><div className="home-stat-grid"><div><strong>04</strong><span>모니터링 보드</span></div><div><strong>09</strong><span>ADC 센서 채널</span></div><div><strong>1ms</strong><span>펌웨어 설정 주기</span></div><div><strong>100ms</strong><span>웹용 스냅샷 설계</span></div></div><p>가상 시험 데이터 · PWM/PFM 실제 제어 미연결</p></div>
+              </section>
+              <div className="home-section-heading"><div><h3>어떤 시험을 진행할까요?</h3><p>기능을 선택하면 해당 설정 화면으로 이동합니다.</p></div><span>6 TEST MODULES</span></div>
+              <div className="home-launch-grid">
+                {[
+                  {id:'integration',num:'01',icon:'⇄',title:'데이터 연결',desc:'자동 시연 · PC 브리지 · 수동 모드',tone:'cyan'},
+                  {id:'manual',num:'02',icon:'◫',title:'수동 센서 시험',desc:'9채널 입력값 변경 및 측정 결과',tone:'blue'},
+                  {id:'protection',num:'03',icon:'◇',title:'보호 기능 시험',desc:'과전압 · 과전류 · 과열 · 복귀',tone:'orange'},
+                  {id:'filter',num:'04',icon:'≋',title:'ADC 필터 실험',desc:'원시 ADC ↔ EMA 반응 비교',tone:'violet'},
+                  {id:'cooling',num:'05',icon:'◷',title:'냉각 계산',desc:'주변 온도별 온도 변화 그래프',tone:'teal'},
+                  {id:'history',num:'06',icon:'⌁',title:'실시간 그래프',desc:'보드별 시간 이력 · CSV 저장',tone:'indigo'},
+                ].map(item=><button type="button" key={item.id} className={`launch-card launch-${item.tone}`} onClick={()=>navigate(item.id)}>
+                  <span className="launch-icon" aria-hidden="true">{item.icon}</span><span className="launch-text"><small>MODULE {item.num}</small><strong>{item.title}</strong><span>{item.desc}</span></span><span className="launch-arrow" aria-hidden="true">↗</span>
+                </button>)}
+              </div>
+              <div className="home-bottom-strip"><span className="home-warning-dot"/><strong>개발·검증 상태</strong><span>가상 데이터 전용 · 실제 PCB 미연결 · 제어 출력은 아직 연동되지 않았습니다.</span></div>
+            </div>
+            <div className={pageClass('integration')}>
       <section className="integration-panel content-section" id="integration">
         <div className="integration-head">
           <div><p className="section-kicker">FIRMWARE ↔ WEB / INTEGRATION</p>
@@ -458,15 +477,12 @@ function App() {
         <p className="integration-footnote">{sourceMode === 'demo' ? '브라우저에서 생성한 시험 패킷을 1초마다 갱신합니다. BOARD-02는 주기적으로 변압기 과열 상황을 재현합니다.' : sourceMode === 'bridge' ? 'PC_TEST는 브리지의 가상 패킷입니다. MCU_UART 표시만 실제 직렬 포트에서 수신된 패킷을 뜻합니다.' : '수동 모드에서는 기존 센서 입력 및 회로 센싱 환산 시험을 사용합니다.'} 전류 방향 +1은 데모 전용 가정이며 실물 센서는 미보정 상태입니다.</p>
       </section>
 
-      <div className="notice-strip" role="note">
-        <span className="notice-icon" aria-hidden="true">ⓘ</span>
-        <p><strong>PCB 미도착 · MCU 미연결</strong> — 브라우저 자동 데모와 PC_TEST 브리지는 실제 CCS 펌웨어가 보낸 데이터가 아닙니다. 실제 MCU UART 수신은 전송 펌웨어와 보드 연결 후에만 가능합니다.</p>
-      </div>
-
+            </div>
       {/* ====================================================
           Four-board overview
       ==================================================== */}
 
+      <div className={pageClass('boards')}>
       <section id="boards" className="board-section content-section">
 
         <div className="section-header"><div><p className="section-kicker">01 · BOARD OVERVIEW</p><h2>제어보드 통합 현황</h2><p className="section-subtitle">보드를 선택하면 해당 보드의 센싱 결과와 기록을 확인할 수 있습니다.</p></div><span className="section-count">4 BOARDS</span></div>
@@ -500,10 +516,13 @@ function App() {
 
       </section>
 
+      </div>
+
       {/* ====================================================
           Manual sensor signal injection
       ==================================================== */}
 
+      <div className={pageClass('manual')}>
       {sourceMode === 'manual' ? <section className="manual-test-panel content-section" id="sensor-input">
 
         <div className="manual-test-title">
@@ -603,10 +622,17 @@ function App() {
         <p>현재 모드에서는 센서값을 직접 입력하지 않습니다. 수동값을 변경하려면 위에서 「수동 센서 시험」으로 전환하세요.</p>
       </section>}
 
+      <div className="manual-preview-results" aria-live="polite">
+        <div className="manual-preview-heading"><div><p className="section-kicker">MEASUREMENT PREVIEW</p><h2>{selectedId} · 측정 결과 요약</h2><p>수동 입력된 센서값의 환산 결과입니다. 보호 판정을 보려면 보호 기능 시험 메뉴를 선택하세요.</p></div><button type="button" className="button-outline" onClick={()=>navigate('measurements')}>9채널 상세 분석 ↗</button></div>
+        <div className="manual-preview-grid">{SENSOR_GROUPS.flatMap(group => group.channels).map(channel=><div className="manual-preview-tile" key={channel.key}><span>{channel.label}</span><strong>{formatNumber(measurements[channel.key])} <small>{Number.isFinite(measurements[channel.key])?channel.unit:''}</small></strong><em>{report ? (QUALITY_TEXT[report.quality[channel.key]] ?? '확인 필요') : '시험 대기'}</em></div>)}</div>
+      </div>
+      </div>
+
       {/* ====================================================
           Sensor measurement results
       ==================================================== */}
 
+      <div className={pageClass('measurements')}>
       <section className="detail-section content-section" id="sensor-results">
 
         <div className="section-heading">
@@ -860,6 +886,8 @@ function App() {
 
       </section>
 
+      </div>
+
       {/* ====================================================
           Real-time ADC sensor history
           New feature:
@@ -869,32 +897,40 @@ function App() {
       ==================================================== */}
 
       {/* 보호 시험이 핵심 시연 기능이므로 그래프보다 앞에 배치합니다. */}
-      <div id="protection"><ProtectionPanel
+      <div className={pageClass('protection')}>
+        <div className="protect-workflow-help"><div><strong>이상 상황을 직접 만들고 싶나요?</strong><span>수동 센서 시험에서 PV 전압·전류·온도를 변경하면 이 화면의 보호 판정에 반영됩니다.</span></div><button className="button-outline" type="button" onClick={()=>navigate('manual')}>센서값 설정 ↗</button></div>
+        <div id="protection"><ProtectionPanel
         reports={reports}
         simulationEnabled={sensorActive}
         selectedId={selectedId}
       /></div>
 
-      <div id="history"><SensorHistory
+      </div>
+      <div className={pageClass('history')}><div id="history"><SensorHistory
         reports={reports}
         simulationEnabled={sensorActive}
         selectedId={selectedId}
       /></div>
 
-      <div id="adc-filter"><AdcFilterLab selectedId={selectedId} /></div>
+      </div>
+      <div className={pageClass('filter')}><div id="adc-filter"><AdcFilterLab selectedId={selectedId} /></div>
 
-      <div id="cooling"><CoolingPanel
+      </div>
+      <div className={pageClass('cooling')}><div id="cooling"><CoolingPanel
         report={report}
         simulationEnabled={sensorActive}
         selectedId={selectedId}
       /></div>
 
+      </div>
       {/* Footer - keep only one footer */}
       <footer className="dashboard-footer">
         <span><strong>올라가조</strong> · 1kW급 PV-CLLC 컨버터 제어보드 및 제어 알고리즘 개발</span>
         <span>F28388D · 4개 보드 · 9채널 센싱 · 보호 상태 · 냉각 계산</span>
       </footer>
-
+        </div>
+        </div>
+      </div>
     </main>
   );
 }
