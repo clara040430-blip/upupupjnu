@@ -1,0 +1,44 @@
+.history-panel {
+  padding: 24px;
+  margin-top: 28px;
+  border: 1px solid #314764;
+  border-radius: 14px;
+  background: #101e33;
+  color: #e5efff;
+}
+.history-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.history-title-row h2 { margin: 0 0 6px; }
+.history-description,
+.history-disclaimer { margin: 0; font-size: 13px; line-height: 1.6; color: #b5c5de; }
+.history-status { padding: 7px 10px; border-radius: 999px; border: 1px solid #596579; font-size: 12px; }
+.history-status.recording { color: #8bf0c3; border-color: #368d77; }
+.history-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 20px 0 14px; }
+.history-group-selector { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: #c2d2e8; }
+.history-group-selector select { background: #0b1526; color: #e5efff; border: 1px solid #475e7b; border-radius: 8px; padding: 9px 12px; min-width: 160px; }
+.history-count { margin-right: auto; color: #aebed6; font-size: 13px; padding: 10px 0; }
+.history-action { background: #193450; color: #e8f3ff; border: 1px solid #496985; border-radius: 8px; padding: 10px 13px; cursor: pointer; font-size: 13px; }
+.history-action:hover:not(:disabled) { background: #285071; }
+.history-action:disabled { opacity: .45; cursor: not-allowed; }
+.history-clear { background: #392334; border-color: #855370; }
+.history-clear:hover:not(:disabled) { background: #522e45; }
+.history-chart-region { overflow: hidden; border-radius: 10px; background: #0b1629; border: 1px solid #30435f; padding: 12px; }
+.history-legend { display: flex; gap: 10px 20px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; color: #d8e5fb; }
+.history-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.history-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.history-chart { width: 100%; height: auto; display: block; }
+.history-grid-line { stroke: #32415d; stroke-width: 1; }
+.history-axis-label { fill: #b5c6df; font-size: 15px; }
+.history-empty { color: #c4d4ee; padding: 34px 10px; margin: 0; font-size: 14px; line-height: 1.7; }
+.history-disclaimer { margin-top: 12px; }
+@media (max-width: 700px) {
+  .history-panel { padding: 14px; }
+  .history-controls { align-items: stretch; }
+  .history-count { width: 100%; }
+  .history-chart-region { padding: 8px; }
+}
