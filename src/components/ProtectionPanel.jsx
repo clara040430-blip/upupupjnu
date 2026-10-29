@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
 import { BOARD_IDS } from '../model/telemetry';
 import {
-  DEMO_LIMITS, WARNING_RATIO, RESET_RATIO,
-  evaluateProtectionReport, createProtectionState,
-  advanceProtectionState, validateDemoLimits,
+  WARNING_RATIO, RESET_RATIO,
 } from '../protection/protectionEngine';
 import './ProtectionPanel.css';
 
@@ -20,50 +17,19 @@ const STATES = {
   WARNING: '경고', DATA_UNVERIFIED: '센서 확인 불가',
   FAULT_LATCHED: 'FAULT 래치', RESET_READY: '복귀 요청 대기',
 };
-const createStates = () => Object.fromEntries(BOARD_IDS.map(id => [id,createProtectionState()]));
-
-export default function ProtectionPanel({ reports, simulationEnabled, selectedId }) {
-  const [draftLimits, setDraftLimits] = useState(() =>
-    Object.fromEntries(Object.entries(DEMO_LIMITS).map(([k,v])=>[k,String(v)]))
-  );
-  const limits = useMemo(() => Object.fromEntries(
-    FIELDS.map(({key}) => {
-      const v = draftLimits[key];
-      return [key, v.trim() === '' ? NaN : Number(v)];
-    })
-  ), [draftLimits]);
-  const validLimits = validateDemoLimits(limits);
-  const assessments = useMemo(() => Object.fromEntries(
-    BOARD_IDS.map((id)=>[id,evaluateProtectionReport(reports?.[id],limits)])
-  ), [reports,limits]);
-  const [states, setStates] = useState(createStates);
-
-  useEffect(() => {
-    const timestampMs = Date.now();
-    setStates((prev) => Object.fromEntries(BOARD_IDS.map((id) => [
-      id, advanceProtectionState(prev[id], assessments[id], {enabled:simulationEnabled,timestampMs}),
-    ])));
-  }, [assessments, simulationEnabled]);
-
-  const selected = states[selectedId] ?? createProtectionState();
+export default function ProtectionPanel({ monitor, simulationEnabled, selectedId }) {
+  const { draftLimits, setDraftLimits, validLimits, assessments, states,
+    requestReset, resetAll } = monitor;
+  const selected = states[selectedId];
   const assessment = assessments[selectedId];
   const canReset = simulationEnabled && validLimits && selected.latched && assessment.clearForReset;
   const displayPhase = !simulationEnabled && selected.latched
     ? 'FAULT_LATCHED' : (simulationEnabled ? selected.phase : 'STOPPED');
 
-  function requestReset() {
-    if (!simulationEnabled) return;
-    setStates((old) => ({
-      ...old,
-      [selectedId]: advanceProtectionState(old[selectedId], assessments[selectedId], {
-        enabled: true, resetRequested: true, timestampMs: Date.now(),
-      }),
-    }));
-  }
   function resetAllDemo() {
     if (simulationEnabled) return;
     if (!window.confirm('시험 중지 상태에서만 초기화합니다. 모든 보드의 시험 상태와 이벤트 기록을 삭제할까요?')) return;
-    setStates(createStates());
+    resetAll();
   }
 
   return (
@@ -107,7 +73,7 @@ export default function ProtectionPanel({ reports, simulationEnabled, selectedId
           <small>{selected.latched ? 'FAULT 유지 · 차단 요구 표시' : '차단 요구 없음'}</small>
         </div>
         <div className="protect-actions">
-          <button type="button" onClick={requestReset} disabled={!simulationEnabled || !selected.latched}>
+          <button type="button" onClick={() => requestReset(selectedId)} disabled={!simulationEnabled || !selected.latched}>
             시험 보호 복귀 요청
           </button>
           <button type="button" className="protect-secondary" onClick={resetAllDemo} disabled={simulationEnabled}>

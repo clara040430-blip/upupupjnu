@@ -10,6 +10,7 @@
 export const ADC_SPEC = Object.freeze({
   resolutionBits: 12,
   maxCount: 4095,
+  codeLevels: 4096,
   referenceVoltageV: 3.3,
 });
 
@@ -41,7 +42,7 @@ export function adcCountToVolts(rawCount) {
   if (!Number.isInteger(rawCount) || rawCount < 0 || rawCount > ADC_SPEC.maxCount) {
     return null;
   }
-  return rawCount * ADC_SPEC.referenceVoltageV / ADC_SPEC.maxCount;
+  return rawCount * ADC_SPEC.referenceVoltageV / ADC_SPEC.codeLevels;
 }
 
 /**

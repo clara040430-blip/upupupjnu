@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   BOARD_IDS,
@@ -23,6 +23,9 @@ import ProtectionPanel from './components/ProtectionPanel';
 import CoolingPanel from './components/CoolingPanel';
 import { createDemoPackets } from './integration/demoPackets';
 import { packetToReport, validateTelemetryPacket } from './integration/protocol';
+import { acceptNextPacket, freshFrames, hasStaleFrame } from './integration/streamHealth';
+import { useProtectionMonitor } from './protection/useProtectionMonitor';
+import { resolveBoardStatus } from './protection/boardStatus';
 import './WorkspaceUI.css';
 // ============================================================
 // Initial sensor inputs for four independent boards
@@ -145,7 +148,10 @@ function App() {
   const [sourceMode, setSourceMode] = useState('demo');
   const [demoRunning, setDemoRunning] = useState(true);
   const [demoPackets, setDemoPackets] = useState({});
-  const [bridgePackets, setBridgePackets] = useState({});
+  const [bridgeFrames, setBridgeFrames] = useState({});
+  const bridgeSequenceRef = useRef({});
+  const [bridgeClock, setBridgeClock] = useState(Date.now());
+  const [bridgeConnectedAt, setBridgeConnectedAt] = useState(null);
   const [bridgeUrl, setBridgeUrl] = useState('http://127.0.0.1:8765/events');
   const [bridgeStatus, setBridgeStatus] = useState('disconnected');
   const [bridgeError, setBridgeError] = useState('');
@@ -168,17 +174,23 @@ function App() {
     try {
       setBridgeStatus('connecting');
       setBridgeError('');
-      setBridgePackets({});
+      bridgeSequenceRef.current = {};
+      setBridgeFrames({});
+      setBridgeClock(Date.now());
+      setBridgeConnectedAt(null);
       stream = new EventSource(bridgeUrl);
     } catch (error) {
       setBridgeStatus('disconnected');
       setBridgeError(error.message);
       return undefined;
     }
-    stream.onopen = () => { setBridgeStatus('connected'); setBridgeError(''); };
+    stream.onopen = () => { setBridgeStatus('connected'); setBridgeConnectedAt(Date.now()); setBridgeError(''); };
     stream.onerror = () => {
       setBridgeStatus('disconnected');
-      setBridgePackets({});
+      bridgeSequenceRef.current = {};
+      setBridgeFrames({});
+      setBridgeClock(Date.now());
+      setBridgeConnectedAt(null);
       setBridgeError('브리지 연결이 끊어졌습니다. 로컬 PC 서버와 주소를 확인하세요.');
     };
     const onPacket = (event) => {
@@ -188,7 +200,16 @@ function App() {
         if (issue) throw new Error(issue);
         if (packet.source !== 'PC_TEST' && packet.source !== 'MCU_UART')
           throw new Error('브리지의 데이터 출처가 유효하지 않습니다.');
-        setBridgePackets((old) => ({ ...old, [packet.boardId]: packet }));
+        const receivedAtMs = Date.now();
+        const result = acceptNextPacket(bridgeSequenceRef.current[packet.boardId], packet, receivedAtMs);
+        if (!result.accepted) {
+          setBridgeError(`패킷 거부: ${result.reason} (${packet.boardId})`);
+          return;
+        }
+        bridgeSequenceRef.current = { ...bridgeSequenceRef.current, [packet.boardId]: result.frame };
+        setBridgeFrames(old => ({ ...old, [packet.boardId]: result.frame }));
+        setBridgeClock(receivedAtMs);
+        setBridgeError('');
       } catch (error) {
         setBridgeError(`패킷 거부: ${error.message}`);
       }
@@ -199,6 +220,23 @@ function App() {
       stream.close();
     };
   }, [sourceMode, bridgeUrl]);
+
+
+  useEffect(() => {
+    if (sourceMode !== 'bridge') return undefined;
+    const clock = setInterval(() => setBridgeClock(Date.now()), 1000);
+    return () => clearInterval(clock);
+  }, [sourceMode]);
+
+  const receivedFrames = useMemo(() => freshFrames(bridgeFrames, bridgeClock), [bridgeFrames, bridgeClock]);
+  const bridgePackets = useMemo(() => Object.fromEntries(
+    Object.entries(receivedFrames).map(([id, frame]) => [id, frame.packet])
+  ), [receivedFrames]);
+  const bridgeHasFresh = Object.keys(bridgePackets).length > 0;
+  const bridgeStalled = sourceMode === 'bridge' && bridgeStatus === 'connected' &&
+    !bridgeHasFresh && bridgeConnectedAt !== null && bridgeClock - bridgeConnectedAt > 5000;
+  const selectedBridgeStale = sourceMode === 'bridge' &&
+    (hasStaleFrame(bridgeFrames, selectedId, bridgeClock) || bridgeStalled);
 
 
   const [
@@ -257,9 +295,11 @@ function App() {
 
 
   const packets = sourceMode === 'demo' ? demoPackets : bridgePackets;
+  // The stream being open does not prove a valid fresh measurement exists.
   const sensorActive = sourceMode === 'manual'
     ? simulationEnabled
     : sourceMode === 'demo' ? demoRunning : bridgeStatus === 'connected';
+  const dataReceiving = sourceMode === 'bridge' ? bridgeHasFresh && bridgeStatus === 'connected' : sensorActive;
   const reports = useMemo(() => {
     if (sourceMode === 'manual') return manualReports;
     if (sourceMode === 'demo' && !demoRunning) return {};
@@ -314,27 +354,13 @@ function App() {
     }));
   }
 
-  // ----------------------------------------------------------
-  // Board status label
-  // ----------------------------------------------------------
-
-  function boardLabel(id) {
-    if (!sensorActive) {
-      return '시험 대기';
-    }
-
-    const quality = Object.values(
-      reports[id]?.quality ?? {}
-    );
-
-    if (
-      quality.includes('ADC_INPUT_CLIPPED') ||
-      quality.includes('ADC_RAIL')
-    ) {
-      return '센싱 범위 주의';
-    }
-
-    return sourceMode === 'manual' ? '센싱 시험 중' : '패킷 수신 중';
+  // One protection controller shared by overview and detailed protection page.
+  const protection = useProtectionMonitor(reports, sensorActive);
+  function boardStatus(id) {
+    return resolveBoardStatus({ enabled: sensorActive, report: reports[id],
+      state: protection.states[id], sourceMode,
+      stale: sourceMode === 'bridge' && (hasStaleFrame(bridgeFrames, id, bridgeClock) || bridgeStalled),
+    });
   }
 
   // ----------------------------------------------------------
@@ -369,7 +395,7 @@ function App() {
             <span className="sidebar-symbol" aria-hidden="true">↗</span>
             <span className="sidebar-brand-name"><strong>올라가조</strong><small>PV-CLLC CONTROL LAB</small></span>
           </button>
-          <div className="sidebar-label">CONTROL WORKSPACE <span>v2.6</span></div>
+          <div className="sidebar-label">CONTROL WORKSPACE <span>v2.7</span></div>
           <nav className="sidebar-navigation" aria-label="실험과 분석 메뉴">
             {NAV_ITEMS.map((item, i) => (
               <div key={item.id}>
@@ -390,15 +416,15 @@ function App() {
             <div className="toolbar-left"><button className="mobile-menu-button" type="button" aria-label="메뉴 열기" onClick={() => setSidebarOpen(true)}>☰</button>
               <span className="toolbar-breadcrumb">WORKSPACE <span>/</span> {PAGE_HINTS[activePage][0]}</span></div>
             <div className="toolbar-actions">
-              <span className="toolbar-source">{sourceMode === 'demo' ? 'BROWSER DEMO' : sourceMode === 'manual' ? 'MANUAL TEST' : (packets[selectedId]?.source || 'PC BRIDGE')}</span>
+              <span className="toolbar-source">{sourceMode === 'demo' ? 'BROWSER DEMO' : sourceMode === 'manual' ? 'MANUAL TEST' : (packets[selectedId]?.source ? `${packets[selectedId].source} · 선언값` : 'PC BRIDGE')}</span>
               <label className="toolbar-board-select"><span>보드</span><select aria-label="현재 작업 보드" value={selectedId} onChange={e=>setSelectedId(e.target.value)}>
                 {BOARD_IDS.map(id=><option value={id} key={id}>{id}</option>)}
               </select></label>
-              <button type="button" className={`toolbar-run ${sensorActive ? 'is-running' : ''}`} disabled={sourceMode === 'bridge'}
+              <button type="button" className={`toolbar-run ${dataReceiving ? 'is-running' : ''}`} disabled={sourceMode === 'bridge'}
                 onClick={() => sourceMode === 'manual' ? setSimulationEnabled(old => !old) : setDemoRunning(old => !old)}>
                 {sourceMode === 'bridge' ? '브리지 수신' : sensorActive ? '■ 시험 중지' : '▶ 시험 시작'}
               </button>
-              <span className={`toolbar-connection ${sensorActive ? 'is-on' : ''}`}><i />{sensorActive ? '시험 데이터 표시 중' : '시험 대기'}</span>
+              <span className={`toolbar-connection ${dataReceiving ? 'is-on' : ''}`}><i />{selectedBridgeStale ? '데이터 지연 · 미수신' : dataReceiving ? '시험 데이터 표시 중' : '시험 대기'}</span>
             </div>
           </header>
           <div className="workspace-inner">
@@ -436,7 +462,7 @@ function App() {
                   <span className="launch-icon" aria-hidden="true">{item.icon}</span><span className="launch-text"><small>MODULE {item.num}</small><strong>{item.title}</strong><span>{item.desc}</span></span><span className="launch-arrow" aria-hidden="true">↗</span>
                 </button>)}
               </div>
-              <div className="home-bottom-strip"><span className="home-warning-dot"/><strong>개발·검증 상태</strong><span>가상 데이터 전용 · 실제 PCB 미연결 · 제어 출력은 아직 연동되지 않았습니다.</span></div>
+              <div className="home-bottom-strip"><span className="home-warning-dot"/><strong>개발·검증 상태</strong><span>가상 데이터 전용 · 실제 PCB 미연결 · 제어 출력 미연동 · {selectedId} 상태: {boardStatus(selectedId).label}</span></div>
             </div>
             <div className={pageClass('integration')}>
       <section className="integration-panel content-section" id="integration">
@@ -445,7 +471,7 @@ function App() {
             <h2>CCS 데이터 규격 · 웹 통합 모니터링</h2>
             <p>CCS v2.3 ADC 채널 매핑과 대응하는 9채널 패킷으로 웹 기능을 검증합니다. 자동 시연은 가상 ADC 데이터이며 MCU 실제 수신이 아닙니다.</p>
           </div>
-          <span className="integration-pill">{sourceMode === 'demo' ? 'BROWSER TEST' : sourceMode === 'bridge' ? (packets[selectedId]?.source || 'PC BRIDGE') : 'MANUAL TEST'}</span>
+          <span className="integration-pill">{sourceMode === 'demo' ? 'BROWSER TEST' : sourceMode === 'bridge' ? (packets[selectedId]?.source ? `${packets[selectedId].source} · 선언값` : 'PC BRIDGE') : 'MANUAL TEST'}</span>
         </div>
         <div className="integration-mode-grid" role="group" aria-label="데이터 원천 선택">
           <button className={sourceMode === 'demo' ? 'integration-mode active' : 'integration-mode'} type="button" onClick={() => setSourceMode('demo')} aria-pressed={sourceMode === 'demo'}>
@@ -462,7 +488,7 @@ function App() {
           <label>로컬 SSE 주소 <input aria-label="브리지 SSE 주소" value={bridgeUrl}
             onChange={(event) => setBridgeUrl(event.target.value)} /></label>
           <strong className={bridgeStatus === 'connected' ? 'integration-success' : 'integration-warning'}>
-            {bridgeStatus === 'connected' ? '연결됨' : bridgeStatus === 'connecting' ? '연결 시도 중' : '연결 안 됨'}
+            {bridgeStatus === 'connected' ? (bridgeHasFresh ? '연결됨 · 패킷 수신' : bridgeStalled ? '연결됨 · 데이터 없음' : '연결됨 · 수신 대기') : bridgeStatus === 'connecting' ? '연결 시도 중' : '연결 안 됨'}
           </strong>
           <small>연결 테스트: 웹 폴더에서 <code>npm run bridge</code> 실행. 현재 펌웨어에는 UART 전송 코드가 없어 PC_TEST로 시험됩니다.</small>
           {bridgeError && <small className="integration-warning">{bridgeError}</small>}
@@ -474,7 +500,7 @@ function App() {
           <div><small>ADC 실패 누계</small><strong>{report?.packet ? `${report.packet.adcTimeoutCount} timeout / ${report.packet.adcOverflowCount} overflow` : '—'}</strong></div>
           <div><small>제어 출력</small><strong>PFM / MPPT 미구현</strong></div>
         </div>
-        <p className="integration-footnote">{sourceMode === 'demo' ? '브라우저에서 생성한 시험 패킷을 1초마다 갱신합니다. BOARD-02는 주기적으로 변압기 과열 상황을 재현합니다.' : sourceMode === 'bridge' ? 'PC_TEST는 브리지의 가상 패킷입니다. MCU_UART 표시만 실제 직렬 포트에서 수신된 패킷을 뜻합니다.' : '수동 모드에서는 기존 센서 입력 및 회로 센싱 환산 시험을 사용합니다.'} 전류 방향 +1은 데모 전용 가정이며 실물 센서는 미보정 상태입니다.</p>
+        <p className="integration-footnote">{sourceMode === 'demo' ? '브라우저에서 생성한 시험 패킷을 1초마다 갱신합니다. BOARD-02는 주기적으로 변압기 과열 상황을 재현합니다.' : sourceMode === 'bridge' ? 'PC_TEST는 브리지의 가상 패킷입니다. MCU_UART 출처 필드만으로 실제 보드 연결을 인증하지 않습니다. 5초 이상 패킷이 없으면 수신값을 무효화합니다.' : '수동 모드에서는 기존 센서 입력 및 회로 센싱 환산 시험을 사용합니다.'} 전류 방향 +1은 데모 전용 가정이며 실물 센서는 미보정 상태입니다.</p>
       </section>
 
             </div>
@@ -502,7 +528,7 @@ function App() {
             >
 
               <span className="board-card-top"><strong>{id}</strong><span className="board-card-arrow" aria-hidden="true">↗</span></span>
-              <span className="board-card-status"><span className="state-indicator"/>{boardLabel(id)}</span>
+              <span className={`board-card-status board-status-${boardStatus(id).kind}`}><span className="state-indicator"/>{boardStatus(id).label}</span>
               <span className="board-card-metrics">
                 <span>PV <b>{formatNumber(reports[id]?.values?.vpv, 1)} V</b></span>
                 <span>DC <b>{formatNumber(reports[id]?.values?.vdc, 1)} V</b></span>
@@ -900,7 +926,7 @@ function App() {
       <div className={pageClass('protection')}>
         <div className="protect-workflow-help"><div><strong>이상 상황을 직접 만들고 싶나요?</strong><span>수동 센서 시험에서 PV 전압·전류·온도를 변경하면 이 화면의 보호 판정에 반영됩니다.</span></div><button className="button-outline" type="button" onClick={()=>navigate('manual')}>센서값 설정 ↗</button></div>
         <div id="protection"><ProtectionPanel
-        reports={reports}
+        monitor={protection}
         simulationEnabled={sensorActive}
         selectedId={selectedId}
       /></div>

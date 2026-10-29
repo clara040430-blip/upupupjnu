@@ -1,0 +1,17 @@
+올라가조 v2.3 — 새 웹사이트 통합 패키지
+
+1) 기존 C:\Users\ueuin\Documents\PV_CLLC_Project\web 전체를 다른 위치에 백업.
+2) 이 ZIP의 .github, bridge, docs, firmware, public, src 및 설정파일을 기존 web에 병합/덮어쓰기.
+   node_modules / dist / .git 폴더는 건드리지 않음.
+3) VS Code 터미널:
+   cd C:\Users\ueuin\Documents\PV_CLLC_Project\web
+   npm.cmd install
+   npm.cmd run dev
+4) 주소 열기(대개 http://localhost:5173): ① 자동 펌웨어 규격 시연 확인.
+5) 2번째 터미널: npm.cmd run bridge
+6) 웹에서 ② PC 브리지 수신 선택 → 4개 보드의 PC_TEST 데이터 수신 확인.
+7) 팀원 공개 전 npm.cmd run test, npm.cmd run build 수행하고 GitHub push.
+
+실제 F28388D와 연결된 것이 아닙니다. ①/②의 기본 데이터는 시험용입니다.
+실제 하드웨어 연결과 보호 검증은 PCB 및 MCU 직렬 전송 구현 후에 가능합니다.
+README.md에 전체 설명이 있습니다.

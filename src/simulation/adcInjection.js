@@ -84,9 +84,9 @@ export function simulateAdcInjection(physicalBySensor, options = {}) {
       ADC_SPEC.referenceVoltageV,
       Math.max(0, result.voltageV)
     );
-    rawBySensor[sensorKey] = Math.round(
-      clipped * ADC_SPEC.maxCount / ADC_SPEC.referenceVoltageV
-    );
+    rawBySensor[sensorKey] = Math.min(ADC_SPEC.maxCount, Math.round(
+      clipped * ADC_SPEC.codeLevels / ADC_SPEC.referenceVoltageV
+    ));
     inputStatus[sensorKey] = result.voltageV < 0 ||
       result.voltageV > ADC_SPEC.referenceVoltageV
       ? 'ADC_INPUT_CLIPPED'

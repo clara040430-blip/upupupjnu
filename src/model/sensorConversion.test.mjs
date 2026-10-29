@@ -10,7 +10,7 @@ import {
 } from './sensorConversion.js';
 
 const countForVoltage = (volts) =>
-  Math.round(volts / ADC_SPEC.referenceVoltageV * ADC_SPEC.maxCount);
+  Math.round(volts / ADC_SPEC.referenceVoltageV * ADC_SPEC.codeLevels);
 
 const closeTo = (actual, expected, tolerance) => {
   assert.ok(actual !== null && Number.isFinite(actual), `not a finite number: ${actual}`);
@@ -26,7 +26,8 @@ test('nine physical ADC channels are distinct', () => {
 
 test('12-bit ADC conversion and invalid counts', () => {
   assert.equal(adcCountToVolts(0), 0);
-  assert.equal(adcCountToVolts(4095), 3.3);
+  assert.equal(adcCountToVolts(4095), 4095 * 3.3 / 4096);
+  assert.ok(adcCountToVolts(4095) < 3.3); // 4096 quantization levels, 0..4095 codes
   closeTo(adcCountToVolts(2048), 1.65, 0.001);
   for (const bad of [-1, 4096, 1.5, Number.NaN, Infinity, undefined, '100']) {
     assert.equal(adcCountToVolts(bad), null);

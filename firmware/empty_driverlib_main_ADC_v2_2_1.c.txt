@@ -1,0 +1,318 @@
+//#############################################################################
+// FILE: empty_driverlib_main.c
+// Project: Ollagajo - 1 kW PV-CLLC Converter Controller
+// MCU: TMS320F28388D CPU1 | C2000Ware: 26.01.00.00
+// Version: ADC v2.2.1 (link diagnostic + periodic acquisition + filtering)
+//
+// Based on the Texas Instruments DriverLib Empty CPU1 Example.
+// Copyright (C) 2024 Texas Instruments Incorporated - http://www.ti.com
+//
+// Redistribution and use in source and binary forms, with or without
+// modification, are permitted provided that the following conditions are met:
+// Redistributions of source code must retain the above copyright notice,
+// this list of conditions and the following disclaimer.
+// Redistributions in binary form must reproduce the above copyright notice,
+// this list of conditions and the following disclaimer in the documentation
+// and/or other materials provided with the distribution.
+// Neither the name of Texas Instruments Incorporated nor the names of its
+// contributors may be used to endorse or promote products derived from this
+// software without specific prior written permission.
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+// THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+// PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+// CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+// EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+// PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+// OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+// WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+// OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+// ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//#############################################################################
+
+#include "driverlib.h"
+#include "device.h"
+#include "board.h"
+#include "c2000ware_libraries.h"
+
+// --- Settings: provisional until the PCB and sensing circuit are verified ---
+#define PVCLLC_SAMPLE_WINDOW         20U
+#define PVCLLC_ADC_TIMEOUT_LIMIT     1000U
+#define PVCLLC_SAMPLE_RATE_HZ        1000UL
+#define PVCLLC_FILTER_ALPHA          0.10f
+#define ADC_VREF_ASSUMED_V           3.3f
+#define ADC_VOLT_PER_COUNT           (ADC_VREF_ASSUMED_V / 4096.0f)
+#define VPV_SENSE_GAIN               0.078f
+#define VDC_SENSE_GAIN               0.057f
+
+// Raw ADC results (12-bit, 0..4095). Channel map is unchanged.
+volatile uint16_t adcVpvRaw = 0U; // ADCA3
+volatile uint16_t adcIpvRaw = 0U; // ADCA2
+volatile uint16_t adcM1Raw  = 0U; // ADCA4
+volatile uint16_t adcM2Raw  = 0U; // ADCA5
+volatile uint16_t adcIdcRaw = 0U; // ADCD0
+volatile uint16_t adcVdcRaw = 0U; // ADCD1
+volatile uint16_t adcTR1Raw = 0U; // ADCD2
+volatile uint16_t adcTR2Raw = 0U; // ADCD3
+volatile uint16_t adcTR3Raw = 0U; // ADCD4
+
+// Counters and validity: observe these in the CCS Expressions window.
+volatile uint32_t adcSampleCount = 0UL;
+volatile uint32_t adcTimeoutCount = 0UL;
+volatile uint32_t adcOverflowCount = 0UL;
+volatile uint32_t adcPeriodCount = 0UL;
+volatile uint32_t adcOverrunCount = 0UL;
+volatile uint16_t adcDataValid = 0U;
+volatile uint16_t adcFilterReady = 0U;
+
+// ADC pin voltages (NOT calibrated currents or temperatures).
+volatile float Vpv_ADC_V = 0.0f;
+volatile float Ipv_ADC_V = 0.0f;
+volatile float Vdc_ADC_V = 0.0f;
+volatile float Idc_ADC_V = 0.0f;
+volatile float M1_ADC_V  = 0.0f;
+volatile float M2_ADC_V  = 0.0f;
+volatile float TR1_ADC_V = 0.0f;
+volatile float TR2_ADC_V = 0.0f;
+volatile float TR3_ADC_V = 0.0f;
+
+// Filtered ADC pin voltages: exponential moving average, alpha = 0.10.
+volatile float Vpv_ADC_Filtered_V = 0.0f;
+volatile float Ipv_ADC_Filtered_V = 0.0f;
+volatile float Vdc_ADC_Filtered_V = 0.0f;
+volatile float Idc_ADC_Filtered_V = 0.0f;
+volatile float M1_ADC_Filtered_V  = 0.0f;
+volatile float M2_ADC_Filtered_V  = 0.0f;
+volatile float TR1_ADC_Filtered_V = 0.0f;
+volatile float TR2_ADC_Filtered_V = 0.0f;
+volatile float TR3_ADC_Filtered_V = 0.0f;
+
+// Preliminary physical voltage estimates. Gains require verification.
+volatile float Vpv_V = 0.0f;
+volatile float Vdc_V = 0.0f;
+volatile float Vpv_Filtered_V = 0.0f;
+volatile float Vdc_Filtered_V = 0.0f;
+
+void PVCLLC_ADC_init(void);
+void PVCLLC_ADC_read(void);
+void PVCLLC_Timer_init(void);
+static void PVCLLC_ADC_clearFlags(void);
+static void PVCLLC_ADC_process(void);
+static float PVCLLC_lowPass(float oldValue, float newValue);
+
+int main(void)
+{
+    Device_init();
+    Device_initGPIO();
+    Interrupt_initModule();
+    Interrupt_initVectorTable();
+    Board_init();
+    C2000Ware_libraries_init();
+
+    PVCLLC_ADC_init();
+    PVCLLC_Timer_init();
+
+    EINT;
+    ERTM;
+
+    // CPU Timer0 is used only as a polling timebase for ADC telemetry.
+    // This is NOT the PWM control loop and does NOT drive any gate outputs.
+    while(1)
+    {
+        if(CPUTimer_getTimerOverflowStatus(CPUTIMER0_BASE))
+        {
+            CPUTimer_clearOverflowFlag(CPUTIMER0_BASE);
+            adcPeriodCount++;
+            PVCLLC_ADC_read();
+
+            // If the next period arrived while the ADC routine ran,
+            // count a possible missed sampling deadline.
+            if(CPUTimer_getTimerOverflowStatus(CPUTIMER0_BASE))
+            {
+                adcOverrunCount++;
+            }
+        }
+    }
+
+    // Unreachable during normal operation; standard C entry-point signature.
+    return 0;
+}
+
+void PVCLLC_Timer_init(void)
+{
+    CPUTimer_stopTimer(CPUTIMER0_BASE);
+    CPUTimer_disableInterrupt(CPUTIMER0_BASE);
+    CPUTimer_setPreScaler(CPUTIMER0_BASE, 0U); // SYSCLK / 1
+    CPUTimer_setPeriod(CPUTIMER0_BASE,
+                       (DEVICE_SYSCLK_FREQ / PVCLLC_SAMPLE_RATE_HZ) - 1UL);
+    CPUTimer_setEmulationMode(CPUTIMER0_BASE,
+                              CPUTIMER_EMULATIONMODE_RUNFREE);
+    CPUTimer_reloadTimerCounter(CPUTIMER0_BASE);
+    CPUTimer_clearOverflowFlag(CPUTIMER0_BASE);
+    CPUTimer_startTimer(CPUTIMER0_BASE);
+}
+
+void PVCLLC_ADC_init(void)
+{
+    ADC_setPrescaler(ADCA_BASE, ADC_CLK_DIV_4_0);
+    ADC_setPrescaler(ADCD_BASE, ADC_CLK_DIV_4_0);
+    ADC_setMode(ADCA_BASE, ADC_RESOLUTION_12BIT,
+                ADC_MODE_SINGLE_ENDED);
+    ADC_setMode(ADCD_BASE, ADC_RESOLUTION_12BIT,
+                ADC_MODE_SINGLE_ENDED);
+    ADC_setInterruptPulseMode(ADCA_BASE, ADC_PULSE_END_OF_CONV);
+    ADC_setInterruptPulseMode(ADCD_BASE, ADC_PULSE_END_OF_CONV);
+    ADC_enableConverter(ADCA_BASE);
+    ADC_enableConverter(ADCD_BASE);
+    DEVICE_DELAY_US(1000);
+
+    // ADCA (4 channels)
+    ADC_setupSOC(ADCA_BASE, ADC_SOC_NUMBER0, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN3, PVCLLC_SAMPLE_WINDOW); // VPV
+    ADC_setupSOC(ADCA_BASE, ADC_SOC_NUMBER1, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN2, PVCLLC_SAMPLE_WINDOW); // IPV
+    ADC_setupSOC(ADCA_BASE, ADC_SOC_NUMBER2, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN4, PVCLLC_SAMPLE_WINDOW); // MOSFET T1
+    ADC_setupSOC(ADCA_BASE, ADC_SOC_NUMBER3, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN5, PVCLLC_SAMPLE_WINDOW); // MOSFET T2
+
+    // ADCD (5 channels)
+    ADC_setupSOC(ADCD_BASE, ADC_SOC_NUMBER0, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN0, PVCLLC_SAMPLE_WINDOW); // IDC
+    ADC_setupSOC(ADCD_BASE, ADC_SOC_NUMBER1, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN1, PVCLLC_SAMPLE_WINDOW); // VDC
+    ADC_setupSOC(ADCD_BASE, ADC_SOC_NUMBER2, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN2, PVCLLC_SAMPLE_WINDOW); // TRANSFORMER T1
+    ADC_setupSOC(ADCD_BASE, ADC_SOC_NUMBER3, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN3, PVCLLC_SAMPLE_WINDOW); // TRANSFORMER T2
+    ADC_setupSOC(ADCD_BASE, ADC_SOC_NUMBER4, ADC_TRIGGER_SW_ONLY,
+                 ADC_CH_ADCIN4, PVCLLC_SAMPLE_WINDOW); // TRANSFORMER T3
+
+    ADC_setInterruptSource(ADCA_BASE, ADC_INT_NUMBER1, ADC_SOC_NUMBER3);
+    ADC_setInterruptSource(ADCD_BASE, ADC_INT_NUMBER1, ADC_SOC_NUMBER4);
+    ADC_disableContinuousMode(ADCA_BASE, ADC_INT_NUMBER1);
+    ADC_disableContinuousMode(ADCD_BASE, ADC_INT_NUMBER1);
+    PVCLLC_ADC_clearFlags();
+    ADC_enableInterrupt(ADCA_BASE, ADC_INT_NUMBER1);
+    ADC_enableInterrupt(ADCD_BASE, ADC_INT_NUMBER1);
+}
+
+static void PVCLLC_ADC_clearFlags(void)
+{
+    ADC_clearInterruptStatus(ADCA_BASE, ADC_INT_NUMBER1);
+    ADC_clearInterruptStatus(ADCD_BASE, ADC_INT_NUMBER1);
+    ADC_clearInterruptOverflowStatus(ADCA_BASE, ADC_INT_NUMBER1);
+    ADC_clearInterruptOverflowStatus(ADCD_BASE, ADC_INT_NUMBER1);
+}
+
+void PVCLLC_ADC_read(void)
+{
+    uint32_t waitCount;
+    adcDataValid = 0U;
+    PVCLLC_ADC_clearFlags();
+
+    ADC_forceMultipleSOC(ADCA_BASE,
+        ADC_FORCE_SOC0 | ADC_FORCE_SOC1 | ADC_FORCE_SOC2 | ADC_FORCE_SOC3);
+    ADC_forceMultipleSOC(ADCD_BASE,
+        ADC_FORCE_SOC0 | ADC_FORCE_SOC1 | ADC_FORCE_SOC2 |
+        ADC_FORCE_SOC3 | ADC_FORCE_SOC4);
+
+    waitCount = 0UL;
+    while(!ADC_getInterruptStatus(ADCA_BASE, ADC_INT_NUMBER1))
+    {
+        DEVICE_DELAY_US(1);
+        if(++waitCount >= PVCLLC_ADC_TIMEOUT_LIMIT)
+        {
+            adcTimeoutCount++;
+            PVCLLC_ADC_clearFlags();
+            return;
+        }
+    }
+
+    waitCount = 0UL;
+    while(!ADC_getInterruptStatus(ADCD_BASE, ADC_INT_NUMBER1))
+    {
+        DEVICE_DELAY_US(1);
+        if(++waitCount >= PVCLLC_ADC_TIMEOUT_LIMIT)
+        {
+            adcTimeoutCount++;
+            PVCLLC_ADC_clearFlags();
+            return;
+        }
+    }
+
+    if(ADC_getInterruptOverflowStatus(ADCA_BASE, ADC_INT_NUMBER1) ||
+       ADC_getInterruptOverflowStatus(ADCD_BASE, ADC_INT_NUMBER1))
+    {
+        adcOverflowCount++;
+        PVCLLC_ADC_clearFlags();
+        return;
+    }
+
+    // Read only after BOTH ADC modules report conversion completion.
+    adcVpvRaw = ADC_readResult(ADCARESULT_BASE, ADC_SOC_NUMBER0);
+    adcIpvRaw = ADC_readResult(ADCARESULT_BASE, ADC_SOC_NUMBER1);
+    adcM1Raw  = ADC_readResult(ADCARESULT_BASE, ADC_SOC_NUMBER2);
+    adcM2Raw  = ADC_readResult(ADCARESULT_BASE, ADC_SOC_NUMBER3);
+    adcIdcRaw = ADC_readResult(ADCDRESULT_BASE, ADC_SOC_NUMBER0);
+    adcVdcRaw = ADC_readResult(ADCDRESULT_BASE, ADC_SOC_NUMBER1);
+    adcTR1Raw = ADC_readResult(ADCDRESULT_BASE, ADC_SOC_NUMBER2);
+    adcTR2Raw = ADC_readResult(ADCDRESULT_BASE, ADC_SOC_NUMBER3);
+    adcTR3Raw = ADC_readResult(ADCDRESULT_BASE, ADC_SOC_NUMBER4);
+
+    PVCLLC_ADC_process();
+    PVCLLC_ADC_clearFlags();
+    adcSampleCount++;
+    adcDataValid = 1U;
+}
+
+static float PVCLLC_lowPass(float oldValue, float newValue)
+{
+    return oldValue + PVCLLC_FILTER_ALPHA * (newValue - oldValue);
+}
+
+static void PVCLLC_ADC_process(void)
+{
+    Vpv_ADC_V = (float)adcVpvRaw * ADC_VOLT_PER_COUNT;
+    Ipv_ADC_V = (float)adcIpvRaw * ADC_VOLT_PER_COUNT;
+    Vdc_ADC_V = (float)adcVdcRaw * ADC_VOLT_PER_COUNT;
+    Idc_ADC_V = (float)adcIdcRaw * ADC_VOLT_PER_COUNT;
+    M1_ADC_V  = (float)adcM1Raw  * ADC_VOLT_PER_COUNT;
+    M2_ADC_V  = (float)adcM2Raw  * ADC_VOLT_PER_COUNT;
+    TR1_ADC_V = (float)adcTR1Raw * ADC_VOLT_PER_COUNT;
+    TR2_ADC_V = (float)adcTR2Raw * ADC_VOLT_PER_COUNT;
+    TR3_ADC_V = (float)adcTR3Raw * ADC_VOLT_PER_COUNT;
+
+    if(adcFilterReady == 0U)
+    {
+        // First valid sample: initialize filters without a false ramp.
+        Vpv_ADC_Filtered_V = Vpv_ADC_V;
+        Ipv_ADC_Filtered_V = Ipv_ADC_V;
+        Vdc_ADC_Filtered_V = Vdc_ADC_V;
+        Idc_ADC_Filtered_V = Idc_ADC_V;
+        M1_ADC_Filtered_V  = M1_ADC_V;
+        M2_ADC_Filtered_V  = M2_ADC_V;
+        TR1_ADC_Filtered_V = TR1_ADC_V;
+        TR2_ADC_Filtered_V = TR2_ADC_V;
+        TR3_ADC_Filtered_V = TR3_ADC_V;
+        adcFilterReady = 1U;
+    }
+    else
+    {
+        Vpv_ADC_Filtered_V = PVCLLC_lowPass(Vpv_ADC_Filtered_V, Vpv_ADC_V);
+        Ipv_ADC_Filtered_V = PVCLLC_lowPass(Ipv_ADC_Filtered_V, Ipv_ADC_V);
+        Vdc_ADC_Filtered_V = PVCLLC_lowPass(Vdc_ADC_Filtered_V, Vdc_ADC_V);
+        Idc_ADC_Filtered_V = PVCLLC_lowPass(Idc_ADC_Filtered_V, Idc_ADC_V);
+        M1_ADC_Filtered_V  = PVCLLC_lowPass(M1_ADC_Filtered_V, M1_ADC_V);
+        M2_ADC_Filtered_V  = PVCLLC_lowPass(M2_ADC_Filtered_V, M2_ADC_V);
+        TR1_ADC_Filtered_V = PVCLLC_lowPass(TR1_ADC_Filtered_V, TR1_ADC_V);
+        TR2_ADC_Filtered_V = PVCLLC_lowPass(TR2_ADC_Filtered_V, TR2_ADC_V);
+        TR3_ADC_Filtered_V = PVCLLC_lowPass(TR3_ADC_Filtered_V, TR3_ADC_V);
+    }
+
+    // Physical voltage conversion is provisional and NOT calibrated.
+    Vpv_V = Vpv_ADC_V / VPV_SENSE_GAIN;
+    Vdc_V = Vdc_ADC_V / VDC_SENSE_GAIN;
+    Vpv_Filtered_V = Vpv_ADC_Filtered_V / VPV_SENSE_GAIN;
+    Vdc_Filtered_V = Vdc_ADC_Filtered_V / VDC_SENSE_GAIN;
+}
